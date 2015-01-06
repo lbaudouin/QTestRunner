@@ -11,6 +11,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     m_projectIcon =  QIcon(":images/project");
     m_testIcon =  QIcon(":images/test");
+    m_waitIcon =  QIcon(":images/wait");
     m_currentFilepath.clear();
     m_currentFilename.clear();
     m_modified = false;
@@ -29,8 +30,8 @@ MainWindow::MainWindow(QWidget *parent) :
         ui->infoTreeWidget->setHeaderLabels(labels);
     }
 
-    ui->mainToolBar->addAction( m_projectIcon , tr("Add project"), this, SLOT(addProject()) );
-    ui->mainToolBar->addAction( m_testIcon , tr("Add test"), this, SLOT(addTest()) );
+    m_addProjectAction = ui->mainToolBar->addAction( m_projectIcon , tr("Add project"), this, SLOT(addProject()) );
+    m_addTestAction = ui->mainToolBar->addAction( m_testIcon , tr("Add test"), this, SLOT(addTest()) );
     ui->mainToolBar->addSeparator();
     m_startAction = ui->mainToolBar->addAction(this->style()->standardIcon( QStyle::SP_ArrowRight ), tr("Start tests"), this, SLOT(startTests()) );
 
@@ -161,6 +162,7 @@ void MainWindow::showContextMenu(QPoint pt)
         return;
 
     QMenu *menu = new QMenu(this);
+    menu->setDisabled(m_busy);
 
     if(type=="project"){
         menu->addAction(tr("Add project"),this,SLOT(addProject()));
@@ -217,17 +219,10 @@ void MainWindow::startTests()
         m_listProcess.clear();
         m_mapProcess.clear();
 
-        m_startAction->setIcon( this->style()->standardIcon( QStyle::SP_ArrowRight ) );
-        m_startAction->setText( tr("Start") );
-
-        this->setCursor( Qt::ArrowCursor );
-        m_busy = false;
+        setBusy( false );
     }else{
-        m_busy = true;
+        setBusy( true );
         m_nbTest = m_passed = m_failed = m_skipped = 0;
-
-        m_startAction->setIcon( this->style()->standardIcon( QStyle::SP_MediaStop ) );
-        m_startAction->setText( tr("Stop") );
 
         QTreeWidgetItem *root = ui->treeWidget->invisibleRootItem();
 
@@ -238,12 +233,17 @@ void MainWindow::startTests()
         if(m_nbTest==0){
             m_startAction->setEnabled(true);
             ui->statusLabel->setText(tr("No test"));
+            setBusy( false );
         }else{
             ui->statusLabel->setText(tr("Processing"));
 
             if(!m_listProcess.isEmpty()){
+                QTreeWidgetItem *item = m_mapProcess.value(m_listProcess.first());
+                while(item && item!=root){
+                    item->setText(1,tr("Processing"));
+                    item = item->parent();
+                }
                 m_listProcess.first()->start();
-                this->setCursor( Qt::WaitCursor );
             }
         }
 
@@ -255,9 +255,11 @@ void MainWindow::startTests(QTreeWidgetItem *item)
 {
     if(item->checkState(0)==Qt::Unchecked){
         item->setText(1,tr("Skipped"));
+        item->setData(0,STATUS_ROLE,STATUS_SKIP);
         return;
     }else{
-        item->setText(1,tr("Processing"));
+        item->setText(1,tr("Wait"));
+        item->setData(0,STATUS_ROLE,STATUS_WAIT);
     }
 
     int nbTest = m_nbTest;
@@ -265,12 +267,13 @@ void MainWindow::startTests(QTreeWidgetItem *item)
     if(item->columnCount()>0){
         if(item->data(0,TYPE_ROLE).toString()=="test"){
             m_nbTest++;
-            item->setText(1,tr("Processing"));
+            item->setText(1,tr("Wait"));
 
             QString exec = item->data(0,EXEC_ROLE).toString();
 
             if(!QFile::exists(exec)){
                 item->setText(1,tr("File not found"));
+                item->setData(0,STATUS_ROLE,STATUS_FAIL);
                 m_failed++;
             }else{
 
@@ -317,6 +320,7 @@ void MainWindow::startTests(QTreeWidgetItem *item)
 
     if(nbTest==m_nbTest){
         item->setText(1,tr("No test"));
+        item->setData(0,STATUS_ROLE,STATUS_SKIP);
     }
 }
 
@@ -332,6 +336,7 @@ void MainWindow::finished(int /*errorCode*/, QProcess::ExitStatus status)
                 while(item->childCount()>0){
                     item->removeChild(item->child(0));
                 }
+                item->setExpanded(false);
 
                 if(status==QProcess::NormalExit){
 
@@ -349,38 +354,87 @@ void MainWindow::finished(int /*errorCode*/, QProcess::ExitStatus status)
                         child->setData(0,TYPE_ROLE, QString("function"));
                         child->setData(0,REPORT_ROLE, r);
                         child->setText(0,r.name);
-                        child->setText(1,r.incident.type);
-
 
                         child->setCheckState(0,Qt::Checked);
                         /*if(r.name=="initTestCase" || r.name=="cleanupTestCase")*/
                             child->setFlags(child->flags() ^ Qt::ItemIsUserCheckable);
 
                         if(r.incident.type.isEmpty()){
-                            child->setIcon(0, this->style()->standardIcon( QStyle::SP_ArrowDown ));
+                            child->setText(1,"");
+                            child->setIcon(1, this->style()->standardIcon( QStyle::SP_ArrowDown ));
+                            child->setData(0,STATUS_ROLE,STATUS_SKIP);
                         }else if(r.incident.type=="pass"){
-                            child->setIcon(0, this->style()->standardIcon( QStyle::SP_DialogApplyButton ));
+                            child->setText(1,tr("Passed"));
+                            child->setIcon(1, this->style()->standardIcon( QStyle::SP_DialogApplyButton ));
+                            child->setData(0,STATUS_ROLE,STATUS_PASS);
+                        }else if(r.incident.type=="fail"){
+                            child->setText(1,tr("Failed"));
+                            child->setIcon(1, this->style()->standardIcon( QStyle::QStyle::SP_DialogCancelButton ));
+                            child->setData(0,STATUS_ROLE,STATUS_FAIL);
                         }else{
-                            child->setIcon(0, this->style()->standardIcon( QStyle::QStyle::SP_DialogCancelButton ));
+                            child->setText(1,"\""+r.incident.type+"\"");
+                            child->setIcon(1, this->style()->standardIcon( QStyle::QStyle::SP_MessageBoxQuestion ));
+                            child->setData(0,STATUS_ROLE,STATUS_FAIL);
                         }
                     }
 
                     if(report.passed()){
                         item->setText(1,tr("Passed"));
+                        item->setIcon(1, this->style()->standardIcon( QStyle::SP_DialogApplyButton ));
+                        item->setData(0,STATUS_ROLE,STATUS_PASS);
                         m_passed++;
                     }else{
                         item->setText(1,tr("Failed"));
+                        item->setIcon(1, this->style()->standardIcon( QStyle::QStyle::SP_DialogCancelButton ));
+                        item->setData(0,STATUS_ROLE,STATUS_FAIL);
                         m_failed++;
                     }
 
                 }else{
                     item->setText(1,tr("Failed to start"));
+                    item->setIcon(1, this->style()->standardIcon( QStyle::QStyle::SP_DialogCancelButton ));
+                    item->setData(0,STATUS_ROLE,STATUS_FAIL);
                     m_failed++;
                 }
 
                 m_listProcess.removeAll(process);
                 m_mapProcess.remove(process);
                 process->deleteLater();
+
+
+                //Check parent item
+                QTreeWidgetItem *i = item->parent();
+                while(i && i!=ui->treeWidget->invisibleRootItem()){
+                    bool isFinished = true;
+                    bool isPassed = true;
+
+                    for(int k=0;k<i->childCount();k++){
+                        if(i->child(k)->data(0,STATUS_ROLE).toInt() == STATUS_WAIT)
+                            isFinished = false;
+                        if(i->child(k)->data(0,STATUS_ROLE).toInt() == STATUS_FAIL)
+                            isPassed = false;
+                    }
+
+                    if(isFinished){
+                        if(isPassed){
+                            i->setText(1,tr("Passed"));
+                            i->setIcon(1, this->style()->standardIcon( QStyle::SP_DialogApplyButton ));
+                            i->setData(0,STATUS_ROLE,STATUS_PASS);
+                            m_passed++;
+                        }else{
+                            item->setText(1,tr("Failed"));
+                            item->setIcon(1, this->style()->standardIcon( QStyle::QStyle::SP_DialogCancelButton ));
+                            item->setData(0,STATUS_ROLE,STATUS_FAIL);
+                            m_failed++;
+                        }
+                    }else{
+                        i->setIcon(1, m_waitIcon );
+                        i->setData(0,STATUS_ROLE,STATUS_WAIT);
+                    }
+
+                    i = i->parent();
+                }
+
             }
         }
 
@@ -399,6 +453,11 @@ void MainWindow::finished(int /*errorCode*/, QProcess::ExitStatus status)
     ui->detailsLabel->setText(QString("%1\n%2\n%3").arg(tr("%n passed","",m_passed)).arg(tr("%n failed","",m_failed)).arg(tr("%n skipped","",m_skipped)));
 
     if(!m_listProcess.isEmpty()){
+        QTreeWidgetItem *item = m_mapProcess.value(m_listProcess.first());
+        while(item && item!=ui->treeWidget->invisibleRootItem()){
+            item->setText(1,tr("Processing"));
+            item = item->parent();
+        }
         m_listProcess.first()->start();
     }
 
@@ -697,7 +756,9 @@ bool MainWindow::pressNew()
 void MainWindow::pressOpen()
 {
     if(pressNew()){
-        parseXML(QFileDialog::getOpenFileName(this,tr("Open"),QDir::homePath(),"XML (*.xml)"));
+        QString filepath = QFileDialog::getOpenFileName(this,tr("Open"),QDir::homePath(),"XML (*.xml)");
+        if(!filepath.isEmpty())
+            parseXML(filepath);
     }
 }
 
@@ -823,5 +884,26 @@ QMessageBox::StandardButton MainWindow::saveBeforeClose()
         return button;
     }else{
         return QMessageBox::Yes;
+    }
+}
+
+void MainWindow::setBusy(bool busy)
+{
+    m_busy = busy;
+
+    ui->action_Edit->setDisabled( m_busy );
+    ui->action_Rename->setDisabled( m_busy );
+    ui->action_Delete->setDisabled( m_busy );
+    m_addProjectAction->setDisabled( m_busy );
+    m_addTestAction->setDisabled( m_busy );
+
+    if(m_busy){
+        m_startAction->setIcon( this->style()->standardIcon( QStyle::SP_MediaStop ) );
+        m_startAction->setText( tr("Stop") );
+        this->setCursor( Qt::WaitCursor );
+    }else{
+        m_startAction->setIcon( this->style()->standardIcon( QStyle::SP_ArrowRight ) );
+        m_startAction->setText( tr("Start") );
+        this->setCursor( Qt::ArrowCursor );
     }
 }

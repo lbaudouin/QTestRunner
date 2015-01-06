@@ -71,9 +71,9 @@ private:
     QList<QProcess*> m_listProcess;
     QMap<QProcess*,QTreeWidgetItem*> m_mapProcess;
 
-    QAction *m_startAction;
+    QAction *m_startAction, *m_addProjectAction, *m_addTestAction;
 
-    QIcon m_projectIcon, m_testIcon;
+    QIcon m_projectIcon, m_testIcon, m_waitIcon;
 
     QString m_currentFilepath;
     QString m_currentFilename;
@@ -106,6 +106,8 @@ public slots:
     void documentModified();
 
     void displayItemInfo();
+
+    void setBusy(bool busy);
 
 };
 

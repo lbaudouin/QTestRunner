@@ -3,5 +3,6 @@
         <file alias="icon">images/icon.png</file>
         <file alias="project">images/project.png</file>
         <file alias="test">images/test.png</file>
+        <file alias="wait">images/wait.png</file>
     </qresource>
 </RCC>
