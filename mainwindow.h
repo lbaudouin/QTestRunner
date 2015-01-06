@@ -18,6 +18,7 @@
 #include <QFileDialog>
 
 #include "xmloutputparser.h"
+#include "treewidgetitem.h"
 
 #include <QCloseEvent>
 #include <QSettings>
@@ -30,6 +31,8 @@
 
 namespace Ui {
 class MainWindow;
+class TestEdit;
+class ProjectEdit;
 }
 
 class MainWindow : public QMainWindow
@@ -56,6 +59,8 @@ protected:
     void clearStatus(QTreeWidgetItem *item);
 
     QMessageBox::StandardButton saveBeforeClose();
+
+    void sort();
 
 private:
     Ui::MainWindow *ui;
@@ -90,10 +95,13 @@ public slots:
     bool pressClose();
     void pressQuit();
 
+    void pressEdit();
     void pressRename();
     void pressDelete();
 
     void documentModified();
+
+    void displayItemInfo();
 
 };
 

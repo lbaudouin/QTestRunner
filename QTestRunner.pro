@@ -12,9 +12,12 @@ SOURCES += main.cpp\
 
 HEADERS  += mainwindow.h \
     version.h \
-    xmloutputparser.h
+    xmloutputparser.h \
+    treewidgetitem.h
 
-FORMS    += mainwindow.ui
+FORMS    += mainwindow.ui \
+    testedit.ui \
+    projectedit.ui
 
 RESOURCES += \
     ressources.qrc

@@ -63,6 +63,8 @@ void XmlOutputParser::readTestFunction(QXmlStreamReader &xml, TestReport &report
     while(xml.readNextStartElement()) {
         if(xml.name() == "Incident")
             readIncident(xml,testFunctionReport);
+        else if(xml.name() == "Message")
+            readMessage(xml,testFunctionReport);
         else if(xml.name() == "Duration")
             readDuration(xml,testFunctionReport);
         else
@@ -74,17 +76,35 @@ void XmlOutputParser::readTestFunction(QXmlStreamReader &xml, TestReport &report
 
 void XmlOutputParser::readIncident(QXmlStreamReader &xml, TestFunctionReport &report)
 {
-    report.type = xml.attributes().value("type").toString();
-    report.file = xml.attributes().value("file").toString();
-    report.line = xml.attributes().value("line").toInt();
+    report.incident.type = xml.attributes().value("type").toString();
+    report.incident.file = xml.attributes().value("file").toString();
+    report.incident.line = xml.attributes().value("line").toInt();
 
     while(xml.readNextStartElement()) {
         if(xml.name() == "Description")
-            report.description = xml.readElementText();
+            report.incident.description = xml.readElementText();
         else
             xml.skipCurrentElement();
     }
 }
+
+void XmlOutputParser::readMessage(QXmlStreamReader &xml, TestFunctionReport &report)
+{
+    Message message;
+    message.type = xml.attributes().value("type").toString();
+    message.file = xml.attributes().value("file").toString();
+    message.line = xml.attributes().value("line").toInt();
+
+    while(xml.readNextStartElement()) {
+        if(xml.name() == "Description")
+            message.description = xml.readElementText();
+        else
+            xml.skipCurrentElement();
+    }
+
+    report.messages << message;
+}
+
 
 void XmlOutputParser::readDuration(QXmlStreamReader &xml, TestFunctionReport &report)
 {
