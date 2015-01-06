@@ -29,6 +29,7 @@
 
 #define XML_VERSION "0.0.1"
 
+
 namespace Ui {
 class MainWindow;
 class TestEdit;
@@ -67,6 +68,7 @@ private:
 
     int m_nbTest, m_passed, m_failed, m_skipped;
 
+    QList<QProcess*> m_listProcess;
     QMap<QProcess*,QTreeWidgetItem*> m_mapProcess;
 
     QAction *m_startAction;
@@ -78,6 +80,8 @@ private:
     bool m_modified;
 
     QTemporaryDir m_outputDir;
+
+    bool m_busy;
 
 public slots:
     void showContextMenu(QPoint);
