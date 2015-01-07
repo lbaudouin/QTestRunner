@@ -34,6 +34,7 @@ struct Incident{
 };
 
 struct TestFunctionReport{
+    TestFunctionReport() { duration = -1; }
     QString name;
     Incident incident;
     QList<Message> messages;
@@ -52,9 +53,10 @@ struct TestFunctionReport{
         return QVariant::fromValue(*this);
     }
 };
-Q_DECLARE_METATYPE(TestFunctionReport);
+Q_DECLARE_METATYPE(TestFunctionReport)
 
 struct TestReport{
+    TestReport() { duration = -1; }
     QString name;
     QString qtVersion, qTestVersion;
     QList<TestFunctionReport> testedFunction;

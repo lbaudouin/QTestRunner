@@ -19,6 +19,8 @@
 
 #include "xmloutputparser.h"
 #include "treewidgetitem.h"
+#include "testeditdialog.h"
+#include "projecteditdialog.h"
 
 #include <QCloseEvent>
 #include <QSettings>
@@ -108,6 +110,9 @@ public slots:
     void displayItemInfo();
 
     void setBusy(bool busy);
+
+    void setItemStatus(QTreeWidgetItem *item, int status);
+    void setItemStatus(QTreeWidgetItem *item, int status, QString text);
 
 };
 

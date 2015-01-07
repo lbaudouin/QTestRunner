@@ -11,10 +11,12 @@
 #define REPORT_ROLE Qt::UserRole+5
 #define STATUS_ROLE Qt::UserRole+10
 
-#define STATUS_PASS 0
-#define STATUS_FAIL 1
+#define STATUS_FAIL 0
+#define STATUS_PASS 1
 #define STATUS_SKIP 2
-#define STATUS_WAIT 3
+#define STATUS_UNK  3
+#define STATUS_WAIT 4
+#define STATUS_BUSY 5
 
 class TreeWidgetItem : public QTreeWidgetItem
 {

@@ -13,7 +13,9 @@ SOURCES += main.cpp\
 HEADERS  += mainwindow.h \
     version.h \
     xmloutputparser.h \
-    treewidgetitem.h
+    treewidgetitem.h \
+    testeditdialog.h \
+    projecteditdialog.h
 
 FORMS    += mainwindow.ui \
     testedit.ui \
