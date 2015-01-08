@@ -104,22 +104,22 @@ void MainWindow::addProject()
         parentItem = selected.at(0);
     }
 
-    QString name = QInputDialog::getText(this,tr("Add project"),tr("Project name:"),QLineEdit::Normal,tr("<empty_project>"));
-    if(name.isEmpty())
-        return;
-
-    QTreeWidgetItem *projectItem = createChildItem(parentItem);
-    projectItem->setIcon(0, m_projectIcon );
-    projectItem->setData(0, TYPE_ROLE, QString("project") );
-    projectItem->setText(0, name);
-    projectItem->setText(1,tr("New project"));
-    projectItem->setFlags(projectItem->flags() | Qt::ItemIsTristate);
-    projectItem->setExpanded(true);
-    projectItem->setCheckState(0,Qt::Checked);
-
-    documentModified();
-
-    sort();
+    ProjectEditDialog *editDialog = new ProjectEditDialog(this);
+    editDialog->setWindowTitle( tr("Add project"));
+    editDialog->setName( tr("New project") );
+    if(editDialog->exec()){
+        QTreeWidgetItem *projectItem = createChildItem(parentItem);
+        projectItem->setData(0, TYPE_ROLE, QString("project") );
+        projectItem->setIcon(0, m_projectIcon );
+        projectItem->setText(0, editDialog->name() );
+        projectItem->setData(0, ENV_ROLE, editDialog->environment() );
+        projectItem->setText(1,tr("New project"));
+        projectItem->setFlags(projectItem->flags() | Qt::ItemIsTristate);
+        projectItem->setExpanded(true);
+        projectItem->setCheckState(0,Qt::Checked);
+        documentModified();
+        sort();
+    }
 }
 
 void MainWindow::addTest()
@@ -130,22 +130,24 @@ void MainWindow::addTest()
         return;
     }
 
-    QString name = QInputDialog::getText(this,tr("Add test"),tr("Test name:"),QLineEdit::Normal,tr("<empty_test>"));
-    if(name.isEmpty())
-        return;
-
-    QTreeWidgetItem *testItem = createChildItem(selected.at(0));
-    testItem->setIcon(0, m_testIcon );
-    testItem->setData(0, TYPE_ROLE, QString("test"));
-    testItem->setText(0, name);
-    testItem->setText(1, tr("New test"));
-    testItem->setFlags(testItem->flags() ^ Qt::ItemIsTristate);
-    testItem->setExpanded(true);
-    testItem->setCheckState(0,Qt::Checked);
-
-    documentModified();
-
-    sort();
+    TestEditDialog *editDialog = new TestEditDialog(this);
+    editDialog->setWindowTitle( tr("Add test"));
+    editDialog->setName( tr("New test") );
+    if(editDialog->exec()){
+        QTreeWidgetItem *testItem = createChildItem(selected.at(0));
+        testItem->setData(0, TYPE_ROLE, QString("test"));
+        testItem->setIcon(0, m_testIcon );
+        testItem->setText(0, editDialog->name() );
+        testItem->setData(0, EXEC_ROLE, editDialog->executable() );
+        testItem->setData(0, ARGS_ROLE, editDialog->arguments() );
+        testItem->setData(0, ENV_ROLE, editDialog->environment() );
+        testItem->setText(1, tr("New test"));
+        testItem->setFlags(testItem->flags() ^ Qt::ItemIsTristate);
+        testItem->setExpanded(true);
+        testItem->setCheckState(0,Qt::Checked);
+        documentModified();
+        sort();
+    }
 }
 
 void MainWindow::showContextMenu(QPoint pt)
@@ -161,6 +163,9 @@ void MainWindow::showContextMenu(QPoint pt)
 
     QMenu *menu = new QMenu(this);
     menu->setDisabled(m_busy);
+
+    menu->addAction(tr("Run"),this,SLOT(runSingleTest()))->setEnabled(false);
+    menu->addSeparator();
 
     if(type=="project"){
         menu->addAction(tr("Add project"),this,SLOT(addProject()));
@@ -201,6 +206,7 @@ void MainWindow::showContextMenu(QPoint pt)
 void MainWindow::clearStatus(QTreeWidgetItem *item)
 {
     item->setText(1,QString());
+    item->setIcon(1, QIcon() );
 
     if(item->data(0,TYPE_ROLE).toString()=="test"){
         while(item->childCount()>0){
@@ -267,50 +273,50 @@ void MainWindow::startTests(QTreeWidgetItem *item)
     }
 
     int nbTest = m_nbTest;
+    int nbTestFail = m_failed;
 
-    if(item->columnCount()>0){
-        if(item->data(0,TYPE_ROLE).toString()=="test"){
-            m_nbTest++;
-            QString exec = item->data(0,EXEC_ROLE).toString();
+    QString type = item->data(0,TYPE_ROLE).toString();
+    if(type=="test"){
+        m_nbTest++;
+        QString exec = item->data(0,EXEC_ROLE).toString();
 
-            if(!QFile::exists(exec)){
-                setItemStatus(item,STATUS_FAIL,tr("File not found"));
-                m_failed++;
-            }else{
+        if(!QFile::exists(exec)){
+            setItemStatus(item,STATUS_FAIL,tr("File not found"));
+            m_failed++;
+        }else{
 
-                QString argsString = item->data(0,ARGS_ROLE).toString();
-                QString output = item->text(0);
-                if(output.isEmpty())
-                    output = "unamed";
-                output = m_outputDir.path() + QDir::separator() + output + "-output.xml";
+            QString argsString = item->data(0,ARGS_ROLE).toString();
+            QString output = item->text(0);
+            if(output.isEmpty())
+                output = "unamed";
+            output = m_outputDir.path() + QDir::separator() + output + "-output.xml";
 
-                QString envString;
+            QString envString;
 
-                QTreeWidgetItem *i = item;
-                while(i && i!=ui->treeWidget->invisibleRootItem()){
-                    QString e = i->data(0,ENV_ROLE).toString();
-                    if(!e.isEmpty())
-                        envString += e + ";";
-                    i = i->parent();
-                }
-
-                QStringList arguments = argsString.split(" ",QString::SkipEmptyParts);
-                arguments << "-xml" << "-o" << output;
-
-                QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-                env.insert("PATH", env.value("Path") + ";" + envString );
-
-                QProcess *process = new QProcess(this);
-                connect(process,SIGNAL(finished(int,QProcess::ExitStatus)),this,SLOT(finished(int,QProcess::ExitStatus)));
-                process->setProcessEnvironment( env );
-                process->setArguments( arguments );
-                process->setProgram( exec );
-
-                //qDebug() << exec << arguments << envString;
-
-                m_listProcess << process;
-                m_mapProcess.insert(process,item);
+            QTreeWidgetItem *i = item;
+            while(i && i!=ui->treeWidget->invisibleRootItem()){
+                QString e = i->data(0,ENV_ROLE).toString();
+                if(!e.isEmpty())
+                    envString += e + ";";
+                i = i->parent();
             }
+
+            QStringList arguments = argsString.split(" ",QString::SkipEmptyParts);
+            arguments << "-xml" << "-o" << output;
+
+            QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+            env.insert("PATH", env.value("Path") + ";" + envString );
+
+            QProcess *process = new QProcess(this);
+            connect(process,SIGNAL(finished(int,QProcess::ExitStatus)),this,SLOT(finished(int,QProcess::ExitStatus)));
+            process->setProcessEnvironment( env );
+            process->setArguments( arguments );
+            process->setProgram( exec );
+
+            //qDebug() << exec << arguments << envString;
+
+            m_listProcess << process;
+            m_mapProcess.insert(process,item);
         }
     }
 
@@ -322,6 +328,9 @@ void MainWindow::startTests(QTreeWidgetItem *item)
     if(nbTest==m_nbTest){
         setItemStatus(item,STATUS_SKIP,tr("No test"));
     }
+    if(nbTestFail<m_failed && type=="project"){
+        setItemStatus(item,STATUS_FAIL);
+    }
 }
 
 void MainWindow::finished(int /*errorCode*/, QProcess::ExitStatus status)
@@ -332,6 +341,7 @@ void MainWindow::finished(int /*errorCode*/, QProcess::ExitStatus status)
         if(m_listProcess.contains(process)){
             QTreeWidgetItem *item = m_mapProcess.value(process);
             if(item){
+                item->setExpanded(false);
                 /*while(item->childCount()>0){
                     item->removeChild(item->child(0));
                 }*/
@@ -411,11 +421,9 @@ void MainWindow::finished(int /*errorCode*/, QProcess::ExitStatus status)
                 }
             }
         }
-
-        m_nbTest--;
     }
 
-    if(m_nbTest<=0){
+    if(m_nbTest==m_failed+m_passed){
         if(m_failed==0)
             ui->statusLabel->setText(tr("Passed"));
         else
@@ -443,6 +451,7 @@ void MainWindow::setItemStatus(QTreeWidgetItem *item, int status)
     case STATUS_FAIL: text = tr("Failed"); break;
     case STATUS_PASS: text = tr("Passed"); break;
     case STATUS_SKIP: text = tr("Skipped"); break;
+    case STATUS_UNK:  text = tr("Unknow"); break;
     case STATUS_WAIT: text = tr("Wait"); break;
     case STATUS_BUSY: text = tr("Processing"); break;
     default: break;
@@ -582,8 +591,8 @@ void MainWindow::readProject(QXmlStreamReader &xml, QTreeWidgetItem *item)
     projectItem->setIcon(0, m_projectIcon );
     projectItem->setData(0, TYPE_ROLE, xml.name().toString());
     projectItem->setText(0, xml.attributes().value("name").toString());
-    projectItem->setText(1,tr("Unknow"));
     projectItem->setFlags(projectItem->flags() | Qt::ItemIsTristate);
+    setItemStatus(projectItem,STATUS_UNK);
 
     bool expanded = true;
     bool disabled = false;
@@ -618,8 +627,8 @@ void MainWindow::readTest(QXmlStreamReader &xml, QTreeWidgetItem *item)
     testItem->setIcon(0, m_testIcon );
     testItem->setData(0, TYPE_ROLE, xml.name().toString());
     testItem->setText(0,tr("Unamed"));
-    testItem->setText(1,tr("Unknow"));
     testItem->setFlags(testItem->flags() ^ Qt::ItemIsTristate);
+    setItemStatus(testItem,STATUS_UNK);
 
     bool expanded = true;
     bool disabled = false;
@@ -914,4 +923,23 @@ void MainWindow::setBusy(bool busy)
         m_startAction->setText( tr("Start") );
         this->setCursor( Qt::ArrowCursor );
     }
+}
+
+void MainWindow::runSingleTest()
+{
+    QList<QTreeWidgetItem*> selected = ui->treeWidget->selectedItems();
+    if(selected.size()!=1 || selected.at(0)->data(0,TYPE_ROLE).toString()=="function"){
+        QMessageBox::warning(this,tr("Warning"),tr("Select one test or one project"));
+        return;
+    }
+    setBusy(true);
+    QTreeWidgetItem *item = selected.at(0);
+    item->setCheckState(0,Qt::Checked);
+    startTests(item);
+}
+
+void MainWindow::runTests()
+{
+    setBusy(true);
+    startTests(ui->treeWidget->invisibleRootItem());
 }

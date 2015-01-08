@@ -114,6 +114,9 @@ public slots:
     void setItemStatus(QTreeWidgetItem *item, int status);
     void setItemStatus(QTreeWidgetItem *item, int status, QString text);
 
+    void runTests();
+    void runSingleTest();
+
 };
 
 #endif // MAINWINDOW_H
