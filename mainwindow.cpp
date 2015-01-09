@@ -7,9 +7,13 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    m_nbTest = m_passed = m_failed = m_skipped = 0;
     m_projectIcon =  QIcon(":images/project");
     m_testIcon =  QIcon(":images/test");
     m_waitIcon =  QIcon(":images/wait");
+    m_startIcon =  QIcon(":images/start");
+    m_startOneIcon =  QIcon(":images/start_one");
+    m_stopIcon =  QIcon(":images/stop");
     m_currentFilepath.clear();
     m_currentFilename.clear();
     m_modified = false;
@@ -31,7 +35,8 @@ MainWindow::MainWindow(QWidget *parent) :
     m_addProjectAction = ui->mainToolBar->addAction( m_projectIcon , tr("Add project"), this, SLOT(addProject()) );
     m_addTestAction = ui->mainToolBar->addAction( m_testIcon , tr("Add test"), this, SLOT(addTest()) );
     ui->mainToolBar->addSeparator();
-    m_startAction = ui->mainToolBar->addAction(this->style()->standardIcon( QStyle::SP_ArrowRight ), tr("Start tests"), this, SLOT(startTests()) );
+    m_startAction = ui->mainToolBar->addAction( m_startIcon , tr("Start tests"), this, SLOT(startTests()) );
+    m_startOneAction = ui->mainToolBar->addAction( m_startOneIcon , tr("Start tests"), this, SLOT(runSingleTest()) );
 
     //Load settings
     QSettings settings(qAppName(),qAppName());
@@ -164,12 +169,12 @@ void MainWindow::showContextMenu(QPoint pt)
     QMenu *menu = new QMenu(this);
     menu->setDisabled(m_busy);
 
-    menu->addAction(tr("Run"),this,SLOT(runSingleTest()))->setEnabled(false);
+    menu->addAction(tr("Run"),this,SLOT(runSingleTest()))->setIcon( m_startOneIcon );
     menu->addSeparator();
 
     if(type=="project"){
-        menu->addAction(tr("Add project"),this,SLOT(addProject()));
-        menu->addAction(tr("Add test"),this,SLOT(addTest()));
+        menu->addAction(tr("Add project"),this,SLOT(addProject()))->setIcon( m_projectIcon );
+        menu->addAction(tr("Add test"),this,SLOT(addTest()))->setIcon( m_testIcon );
         menu->addSeparator();
     }
 
@@ -240,37 +245,22 @@ void MainWindow::startTests()
 
         root->setCheckState(0,Qt::Checked);
         clearStatus(root);
-        startTests(root);
+        addTestToStack(root);
 
-        if(m_nbTest==0){
-            m_startAction->setEnabled(true);
-            ui->statusLabel->setText(tr("No test"));
-            setBusy( false );
-        }else{
-            ui->statusLabel->setText(tr("Processing"));
-
-            if(!m_listProcess.isEmpty()){
-                QTreeWidgetItem *item = m_mapProcess.value(m_listProcess.first());
-                while(item && item!=root){
-                    item->setText(1,tr("Processing"));
-                    item = item->parent();
-                }
-                m_listProcess.first()->start();
-            }
-        }
-
-        ui->detailsLabel->setText(QString("%1\n%2\n%3").arg(tr("%n passed","",m_passed)).arg(tr("%n failed","",m_failed)).arg(tr("%n skipped","",m_skipped)));
+        runTests();
     }
  }
 
-void MainWindow::startTests(QTreeWidgetItem *item)
+void MainWindow::addTestToStack(QTreeWidgetItem *item, bool check)
 {
-    if(item->checkState(0)==Qt::Unchecked){
-        setItemStatus(item,STATUS_SKIP);
-        return;
-    }else{
-        setItemStatus(item,STATUS_WAIT);
+    if(check){
+        if(item->checkState(0)==Qt::Unchecked){
+            setItemStatus(item,STATUS_SKIP);
+            return;
+        }
     }
+
+    setItemStatus(item,STATUS_WAIT);
 
     int nbTest = m_nbTest;
     int nbTestFail = m_failed;
@@ -322,7 +312,7 @@ void MainWindow::startTests(QTreeWidgetItem *item)
 
     for(int i=0;i<item->childCount();i++){
         QTreeWidgetItem *child = item->child(i);
-        startTests(child);
+        addTestToStack(child,check);
     }
 
     if(nbTest==m_nbTest){
@@ -379,8 +369,10 @@ void MainWindow::finished(int /*errorCode*/, QProcess::ExitStatus status)
                     }
 
                     if(report.passed()){
+                        setItemStatus(item,STATUS_PASS);
                         m_passed++;
                     }else{
+                        setItemStatus(item,STATUS_FAIL);
                         m_failed++;
                     }
 
@@ -400,12 +392,17 @@ void MainWindow::finished(int /*errorCode*/, QProcess::ExitStatus status)
                     bool isFinished = true;
                     bool isPassed = true;
 
-                    for(int k=0;k<i->childCount();k++){
-                        int status = i->child(k)->data(0,STATUS_ROLE).toInt();
-                        if( status == STATUS_WAIT)
-                            isFinished = false;
-                        if( status == STATUS_FAIL || status == STATUS_UNK )
-                            isPassed = false;
+                    if(i->childCount()>0){
+                        for(int k=0;k<i->childCount();k++){
+                            int status = i->child(k)->data(0,STATUS_ROLE).toInt();
+                            if( status == STATUS_WAIT)
+                                isFinished = false;
+                            if( status == STATUS_FAIL || status == STATUS_UNK )
+                                isPassed = false;
+                        }
+                    }else{
+                        isFinished = i->data(0,STATUS_ROLE).toInt() != STATUS_WAIT;
+                        isPassed = i->data(0,STATUS_ROLE).toInt() != STATUS_FAIL;
                     }
 
                     if(isFinished){
@@ -913,13 +910,14 @@ void MainWindow::setBusy(bool busy)
     ui->action_Delete->setDisabled( m_busy );
     m_addProjectAction->setDisabled( m_busy );
     m_addTestAction->setDisabled( m_busy );
+    m_startOneAction->setDisabled( m_busy );
 
     if(m_busy){
-        m_startAction->setIcon( this->style()->standardIcon( QStyle::SP_MediaStop ) );
+        m_startAction->setIcon( m_stopIcon );
         m_startAction->setText( tr("Stop") );
         this->setCursor( Qt::WaitCursor );
     }else{
-        m_startAction->setIcon( this->style()->standardIcon( QStyle::SP_ArrowRight ) );
+        m_startAction->setIcon( m_startIcon );
         m_startAction->setText( tr("Start") );
         this->setCursor( Qt::ArrowCursor );
     }
@@ -932,14 +930,33 @@ void MainWindow::runSingleTest()
         QMessageBox::warning(this,tr("Warning"),tr("Select one test or one project"));
         return;
     }
-    setBusy(true);
-    QTreeWidgetItem *item = selected.at(0);
-    item->setCheckState(0,Qt::Checked);
-    startTests(item);
+    addTestToStack(selected.at(0),false);
+    runTests();
 }
 
 void MainWindow::runTests()
 {
-    setBusy(true);
-    startTests(ui->treeWidget->invisibleRootItem());
+    setBusy( true );
+    qDebug() << QString("Nb : tests(%1), fail(%2), pass(%3), skip(%4)").arg(m_nbTest).arg(m_failed).arg(m_passed).arg(m_skipped);
+
+    if(m_nbTest==0){
+        m_startAction->setEnabled(true);
+        ui->statusLabel->setText(tr("No test"));
+        setBusy( false );
+    }else{
+        ui->statusLabel->setText(tr("Processing"));
+
+        if(!m_listProcess.isEmpty()){
+            QTreeWidgetItem *item = m_mapProcess.value(m_listProcess.first());
+            while(item && item!=ui->treeWidget->invisibleRootItem()){
+                item->setText(1,tr("Processing"));
+                item = item->parent();
+            }
+            m_listProcess.first()->start();
+        }else{
+            setBusy( false );
+        }
+    }
+
+    ui->detailsLabel->setText(QString("%1\n%2\n%3").arg(tr("%n passed","",m_passed)).arg(tr("%n failed","",m_failed)).arg(tr("%n skipped","",m_skipped)));
 }

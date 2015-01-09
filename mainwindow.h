@@ -57,7 +57,7 @@ protected:
 
     QTreeWidgetItem* createChildItem(QTreeWidgetItem *item);
 
-    void startTests(QTreeWidgetItem *item);
+    void addTestToStack(QTreeWidgetItem *item, bool check = true);
 
     void clearStatus(QTreeWidgetItem *item);
 
@@ -73,9 +73,9 @@ private:
     QList<QProcess*> m_listProcess;
     QMap<QProcess*,QTreeWidgetItem*> m_mapProcess;
 
-    QAction *m_startAction, *m_addProjectAction, *m_addTestAction;
+    QAction *m_startAction, *m_startOneAction, *m_addProjectAction, *m_addTestAction;
 
-    QIcon m_projectIcon, m_testIcon, m_waitIcon;
+    QIcon m_projectIcon, m_testIcon, m_waitIcon, m_startIcon, m_startOneIcon, m_stopIcon;
 
     QString m_currentFilepath;
     QString m_currentFilename;

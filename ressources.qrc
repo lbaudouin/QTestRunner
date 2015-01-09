@@ -4,5 +4,8 @@
         <file alias="project">images/project.png</file>
         <file alias="test">images/test.png</file>
         <file alias="wait">images/wait.png</file>
+        <file alias="start">images/start.png</file>
+        <file alias="start_one">images/start_one.png</file>
+        <file alias="stop">images/stop.png</file>
     </qresource>
 </RCC>
